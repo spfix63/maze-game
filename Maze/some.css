@@ -1,0 +1,102 @@
+body
+{
+	margin-top: 5%;	
+	text-align: center;	
+	background: url("res/background.jpg");   
+}
+
+table, th, td
+{
+	margin-left: 40%;
+	border: 15px solid grey;
+	
+}
+
+p, h1, h2, h3, h4, h5, h6, summary, figcaption, table, label, form
+{
+	color:#CCCCCC;
+}
+
+#start, #tutorial, #game, #highscore, #userNameD
+{
+	display: none;
+}
+
+.menuinput
+{
+	background: #111111;
+	color: #CCCCCC;
+	font-weight: bold;
+	padding: 0.5% 1% 0.5%;
+    	border-color: #CCCCCC;
+	font-size: 14px;
+	line-height: 1;
+}
+
+#userNameOk
+{
+	width:4%;	
+}
+#userNameLoad
+{
+	width:7.7%;	
+	margin-left:4.1%;	
+}
+
+
+.menubutton
+{
+	background: #111111;
+	color: #CCCCCC;
+	font-weight: bold;
+	padding: 0.5% 1% 0.5%;
+    	cursor: pointer;
+
+	border-color: #CCCCCC;
+	
+	font-size: 14px;
+	line-height: 1;
+	width: 10%;
+}
+
+
+.basechoise
+{
+	margin-top: 2%;
+	margin-bottom: 3%;
+}
+
+
+.carchoise
+{
+	margin-top: 2%;
+	margin-bottom: 3%;
+}
+
+#colorpicker
+{
+	margin-top: 2%;
+	margin-bottom: 3%;
+}
+
+.menuimages
+{
+	margin-top: 2%;
+	margin-bottom: 2%;
+	margin-left: 2%;
+	margin-right: 2%;
+	width: 264px;
+	height: 264px; 
+}
+
+.carbuttons
+{
+	margin-left: 3%;
+	margin-right: 3%;
+}
+
+.carimages
+{
+	width: 7%;
+	height: 7%; 
+}

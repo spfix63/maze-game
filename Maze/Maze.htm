@@ -1,0 +1,705 @@
+﻿<!DOCTYPE html>
+<html manifest="maze.appcache" lang="en"> 
+<head>
+	<meta charset="UTF-8">
+	<title> Maze </title>
+	<link rel="stylesheet" type="text/css" href="some.css" />  
+	<script type="text/javascript" src="js/StartScreen.js"></script>
+	<script type="text/javascript" src="js/MazeObject.js"></script>
+	<script type="text/javascript" src="js/Player.js"></script>
+	<script type="text/javascript" src="js/MazeGenerator.js"></script>	
+	<script type="text/javascript">
+		
+		
+		var Game = {};
+		
+		function showStuff(id) {
+			document.getElementById(id).style.display = 'block';
+		}
+		function hideStuff(id) {
+			document.getElementById(id).style.display = 'none';
+		}
+		
+		function hide(id) {
+			document.getElementById(id).style.visibility = "hidden";
+		}
+		
+		function show(id) {
+			document.getElementById(id).style.visibility = "visible";
+		}
+		
+		/* menu */
+		function playIntro()
+		{
+			document.getElementById('intro').currentTime=0;
+			document.getElementById('intro').play();
+		}
+		
+		/* start */
+		function readyClicked()
+		{
+			if (!supports_html5_storage()) 
+			{ 
+				alert("Your browser doesn't support local storage, you will play with default settings."); 
+				return;
+			}
+			var item = document.getElementById("userName");
+			if (item.value == "")
+				item.value = "Player";
+			localStorage["userName"] = item.value;
+			item = document.getElementById("mastery");
+			localStorage["masteryLevel"] = item.selectedIndex;
+			item = document.getElementById("car1");
+			if (!item.checked)
+			{
+				item = document.getElementById("car2");
+				if (!item.checked)
+				{
+					item = document.getElementById("car3");
+				}
+			}
+			localStorage["modelIndex"] = item.value;
+			item = document.getElementById("pathColor");
+			localStorage["pathColor"] = item.value;
+			
+			hideStuff('start');
+			showStuff('game');
+			onWindowLoaded();
+		}	
+		
+		
+		/* Game */
+		function onWindowLoaded()
+		{
+			Game.start();
+			animLoop(mainLoop);
+		}
+		
+		
+		function mainLoop(dt)
+		{
+			if (Game.pause)
+				return;
+			if (Game.currState == StateEnum.START)
+			{
+				updateStartScreen();
+				redrawStartScreen();
+			}
+			else if ((Game.currState == StateEnum.START) && (Game.interrupted))
+			{				
+					backToMenu();
+					hideStuff('game');
+					showStuff('menu');
+					Key.clear();
+			}
+			else if (Game.currState == StateEnum.LOADING)
+			{
+			}
+			else if (Game.currState == StateEnum.GAME)
+			{
+				updateGameScreen(dt);
+				redrawGameScreen();
+			}
+			else if ((Game.currState == StateEnum.OVER) && !Game.interrupted)        
+			{        
+				var response = confirm("Would you like to save your score?");
+				var score;
+				if (response)
+				{
+					score = Game.maze.getScore();
+					Key.clear();
+					ScoreBoard(score);
+					hideStuff('game');
+					showStuff('highscore');
+				}
+				else
+				{
+					backToMenu();
+					hideStuff('game');
+					showStuff('menu');
+					Key.clear();
+				}
+				return false;
+			}    
+			else //((Game.currState == StateEnum.OVER) && Game.interrupted) 
+			{
+				setTimeout("backToMenu();hideStuff('game');showStuff('menu');playIntro();", 50);
+				return false;
+			}
+		}
+		
+		function animLoop( render, element ) 
+		{
+			var running, lastFrame = +new Date;
+			function loop( now ) 
+			{
+				// stop the loop if render returned false
+				if ( running !== false ) 
+				{
+					window.requestAnimFrame( loop, element );
+					var deltaT = now - lastFrame;
+					// do not render frame when deltaT is too high
+					if ( deltaT < 160 ) 
+					{
+						running = render( deltaT );
+					}
+					lastFrame = now;
+				}
+			}
+			loop( lastFrame );
+		}
+		
+		/*function animloop()
+			{
+			requestAnimFrame(animloop);
+			if (Game.currState == StateEnum.START)
+			{
+			updateStartScreen();
+			//redrawStartScreen();
+			}
+			else if (Game.currState == StateEnum.GAME)
+			{
+			updateGameScreen();
+			redrawGameScreen();
+			};
+		}*/
+		
+		StateEnum =
+		{
+			START: 0,
+			GAME: 1,
+			OVER: 2,
+			STOP: 3
+		}	
+		
+		
+		
+		// shim layer with setTimeout fallback
+		window.requestAnimFrame = (
+		function()
+		{
+			return  window.requestAnimationFrame   || 
+			window.webkitRequestAnimationFrame || 
+			window.mozRequestAnimationFrame    || 
+			window.oRequestAnimationFrame      || 
+			window.msRequestAnimationFrame     || 
+			function( callback )
+			{
+				window.setTimeout(callback, 1000 / 60);
+			};
+		})();
+		
+		Game.start = function()
+		{
+			Game.interrupted = false;
+			Game.pause = false;
+			Game.currState = StateEnum.START;
+			Game.canvas = document.getElementById("gameCanvas");
+			var car = Maze.CAR_RED;
+			var level = Maze.LEVEL_KINDERGARDEN;
+			var color = "#FFFFFF"
+			if (supports_html5_storage())
+			{
+				Game.userName = localStorage["userName"];
+				level = localStorage["masteryLevel"];
+				if (level == 0) level = Maze.LEVEL_KINDERGARDEN;
+				else if (level == 1) level = Maze.LEVEL_CASUAL;
+				else if (level == 2) level = Maze.LEVEL_EASY;
+				
+				car = localStorage["modelIndex"];
+				if (car == "red") car = Maze.CAR_RED;
+				else if (car == "white") car = Maze.CAR_WHITE;
+				else if (car == "yellow") car = Maze.CAR_YELLOW;
+				color = localStorage["pathColor"];
+			}
+			
+			Game.maze = new Maze(200, 100, Game.canvas.width, Game.canvas.height, car);
+			Game.maze.generateMaze(new Block(1, 0), new Block(9, 1), color, level, 0);	
+		}
+		
+		//result - { bool success; Maze maze }
+		Game.onMazeLoaded = function(result)
+		{
+			if (result.success)
+			{
+				Game.maze = result.maze;
+				Game.currState = StateEnum.GAME;
+				hideStuff('menu');
+				showStuff('game');
+				animLoop(mainLoop);
+			}
+			else
+			{
+				Game.currState = StateEnum.OVER;
+				Game.interrupted = true;
+				alert("User doesn't exist");
+			}
+			var butt = document.getElementById("userNameOk");
+			butt.innerHTML = 'Ok';
+			//butt.onclick = 'loadGame();';
+			butt.disabled = false;
+		}
+		
+		Game.load = function(userName)
+		{
+			Game.userName = userName;
+			Game.interrupted = false;
+			Game.pause = false;
+			Game.canvas = document.getElementById("gameCanvas");	
+			Game.currState = StateEnum.LOADING;
+			Maze.loadMaze(userName, Game.onMazeLoaded);
+		}
+		
+		//success bool
+		Game.onMazeSaved = function(success)
+		{
+			var butt = document.getElementById("saveButton");
+			butt.innerHTML = 'Save';
+			//butt.onclick = 'saveClicked()';
+			butt.disabled = false;
+			if (success)
+			{
+			
+			}
+			else
+			{
+				alert("Saving failed for unknown reasons");
+			}
+		}
+		
+		Game.save = function()
+		{
+			if (Game.currState == StateEnum.GAME)
+			{
+				Maze.saveMaze(Game.userName, Game.maze, Game.onMazeSaved);
+			}
+		}
+		
+		function updateStartScreen()
+		{
+			if (Key.isDown(Key.SPACE))
+			{
+				Game.currState = StateEnum.GAME;
+			}
+		}
+		
+		function updateGameScreen(dt)
+		{
+			Game.maze.update(dt);
+		}
+		
+		function redrawGameScreen()
+		{
+			var ctx = Game.canvas.getContext("2d");
+			ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+			Game.maze.draw(ctx);
+			
+			if (Game.maze.gameState == Maze.STATE_OVER)
+			{
+				Game.currState = StateEnum.OVER;
+			}        
+		}
+		
+		function redrawStartScreen()
+		{
+			Game.canvas.width = Game.canvas.width;
+			superCheckerBoard(Game.canvas);
+			bottomText(Game.canvas);
+		}
+		
+		var Key = {
+			_pressed: {},
+			
+			SHIFT: 16,
+			CTRL: 17,
+			SPACE: 32,
+			LEFT: 37,
+			UP: 38,
+			RIGHT: 39,
+			DOWN: 40,
+			A: 65,
+			D: 68,
+			E: 69,
+			F: 70,
+			M: 77,
+			Q: 81,
+			S: 83,
+			W: 87,
+			
+			consumeIsDown: function(keyCode) 
+			{
+				var ret = this._pressed[keyCode];
+				this._pressed[keyCode] = false;
+				return ret;
+			},
+			
+			isDown: function(keyCode) 
+			{
+				return this._pressed[keyCode];
+			},
+			
+			onKeydown: function(event) 
+			{
+				this._pressed[event.keyCode] = true;
+			},
+			
+			onKeyup: function(event) 
+			{
+				delete this._pressed[event.keyCode];
+			},
+			
+			clear: function() 
+			{ 
+				this._pressed = {}; 
+			}
+		};
+		
+	    function stopGame()
+		{
+			Game.maze.gameState = Maze.STATE_OVER;
+			Game.maze.stopSound();
+			Game.interrupted = true;
+			Game.currState = StateEnum.OVER;			
+		}
+		
+		
+		
+		/* Highscores*/
+		function ScoreBoard(score)
+        { 
+            if (score == -1)
+				return;
+				
+			var xmlhttp2 = new XMLHttpRequest();
+			xmlhttp2.open("POST","php/db.php", true);		
+			xmlhttp2.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
+			xmlhttp2.send("func=updateHS&alias="+Game.userName+"&score="+score);
+			
+			
+			xmlhttp2.onreadystatechange=function()
+			{
+				if (xmlhttp2.readyState==4 && xmlhttp2.status==200)
+				{
+					xmlhttp = new XMLHttpRequest();
+					xmlhttp.onreadystatechange=function()
+					{
+						if (xmlhttp.readyState==4 && xmlhttp.status==200)
+						{
+							document.getElementById("dataSection").innerHTML=xmlhttp.responseText;
+						}
+					}			
+					xmlhttp.open("GET","php/db.php?func=loadHS", true);
+					xmlhttp.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
+					xmlhttp.send();
+				}
+			}		
+			/**
+            var prev = new Array(document.getElementById("userName").value, score);
+			
+			if (prev[0] == "")
+				prev[0] = "Player";
+            
+			var table = getTable();
+			var alias, score;
+            var stop = false;
+						
+            
+            for (var i = 1; i < table.rows.length; i++)
+            {
+                row = table.rows[i];
+				alias = row.cells[1].childNodes[0].nodeValue;
+                score = row.cells[2].childNodes[0].nodeValue;
+				
+				if ((score == 0) || (score < prev[1]))
+				{
+					row.cells[1].childNodes[0].nodeValue = prev[0];
+					row.cells[2].childNodes[0].nodeValue = prev[1];
+					prev[0] = alias;
+					prev[1] = score;
+				}				
+            }
+			saveBoard(table);
+			*/
+        }
+		
+		function saveBoard(table)
+		{
+			if (!supports_html5_storage()) 
+			{ 
+				alert("Your browser doesn't support local storage, you will play with default settings."); 
+				return;
+			}
+			if (table)
+			
+
+			for (var i = 1; i < table.rows.length; i++)
+            {
+                row = table.rows[i];
+                localStorage["sctName"+i] = row.cells[1].childNodes[0].nodeValue;
+                localStorage["sctScore"+i] = row.cells[2].childNodes[0].nodeValue;
+            }
+		}
+		
+		function loadBoard()
+		{
+			xmlhttp = new XMLHttpRequest();// nereikia var?
+			xmlhttp.onreadystatechange = function()
+			{
+				// function to call when ready
+				document.getElementById("dataSection").innerHTML=xmlhttp.responseText;
+			}
+			xmlhttp.open("GET", "php/db.php?func=loadHS", true);
+			xmlhttp.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
+			//xmlhttp.open("GET", "php/getHighscores.php", true);
+			xmlhttp.send();
+			/**
+				if (!supports_html5_storage()) 
+				{ 
+					alert("Your browser doesn't support local storage, you will play with default settings."); 
+					return;
+				}			
+				
+				var name, score;
+				var table = getTable();
+							
+				for (var i = 1; i < table.rows.length; i++)
+				{
+					row = table.rows[i];
+					name = localStorage["sctName"+i];
+					score = localStorage["sctScore"+i];
+					
+					row.cells[1].childNodes[0].nodeValue = name ? name : "Place for you?";
+					row.cells[2].childNodes[0].nodeValue = score ? score : "0";
+				}
+			*/
+		}
+		
+        function emptyTable()
+        {
+            if (!supports_html5_storage()) 
+            { 
+                alert("Your browser doesn't support local storage, you will play with default settings."); 
+                return;
+            }
+            var table = getTable();
+            
+            for (var i = 1; i < table.rows.length; i++)
+            {
+                row = table.rows[i];
+                row.cells[1].childNodes[0].nodeValue = "Place for you?";
+                row.cells[2].childNodes[0].nodeValue = "0";
+            }
+			return table;            
+        }
+		
+		function getTable()
+		{
+			return document.getElementById("highScores");
+		}
+		
+        function supports_html5_storage() 
+        {
+            try 
+            {
+                return 'localStorage' in window && window['localStorage'] !== null;
+            } 
+            catch (e) 
+            {
+                return false;
+            }
+        }
+		
+		window.addEventListener('keyup', function(event) { Key.onKeyup(event); }, false);
+		window.addEventListener('keydown', function(event) { Key.onKeydown(event); }, false);
+		window.addEventListener('focus', function() { Game.pause = false; }, false);
+		window.addEventListener('blur', function() { Key.clear(); Game.pause = true;}, false);
+		window.addEventListener('mouseup', function()
+			{
+				if ((Game.canvas != null) && (Game.maze != null))
+					Game.maze.mouseup(event.pageX - Game.canvas.offsetLeft, event.pageY - Game.canvas.offsetTop);
+			}, false
+		);
+		
+		function backToMenu()
+		{
+			var butt = document.getElementById("userNameOk");
+			butt.innerHTML = 'Ok';
+			//butt.onclick = 'loadGame();';
+			butt.disabled = false;
+			butt = document.getElementById("saveButton");
+			butt.innerHTML = 'Save';
+			//butt.onclick = 'saveClicked();';
+			butt.disabled = false;
+			
+			hideStuff("userNameD");
+			showStuff("loadBtnD");
+		}
+		
+		function loadGame()
+		{
+			var item = document.getElementById("userNameLoad");
+			if (item.value == "")
+				return;
+				
+			var butt = document.getElementById("userNameOk");
+			butt.innerHTML = '<img width=14 height=14 src="res/loading.gif"/>';
+			butt.disabled = true;
+			
+			Game.load(item.value);
+		}
+		
+		function saveClicked()
+		{
+            if (Game.currState != StateEnum.GAME)
+                return;
+			//Game.pause = true;
+			var butt = document.getElementById("saveButton");
+			butt.innerHTML = '<img width=14 height=14 src="res/loading.gif"/>';
+			//butt.onclick = '';
+			butt.disabled = true;
+			
+			Game.save();
+			
+			//Game.pause = false;
+		}
+    </script>
+	
+</head>
+<body>
+	<div id="menu">
+		<header id="menuhead">
+			<h1> Welcome! </h1>
+			<h2> Prepare to be mazed! </h2>
+		</header>
+		
+		<audio autoplay="autoplay" id="intro">
+			<source src="res/intro.mp3" type="audio/mp3">
+			Your browser does not support the audio element.
+		</audio>
+		
+		<section class="menubuttons">
+			<button class="menubutton" type="button" onclick="getElementById('intro').pause();hideStuff('menu');showStuff('start')"> Play </button>
+			<div id="loadBtnD">
+				<button id="loadBtn" class="menubutton" type="button" onclick="hideStuff('loadBtnD');showStuff('userNameD')"> Load </button>
+			</div>
+			<div id="userNameD">
+				<input class="menuinput" id="userNameLoad" type="text" name="fname" placeholder="Username" />
+				<button class="menubutton" id="userNameOk" type="button" onclick="loadGame();"> Ok </button>
+			</div>
+			<button class="menubutton" type="button" onclick="getElementById('intro').pause();hideStuff('menu');showStuff('tutorial')"> Tutorial </button><br>
+			<button class="menubutton" type="button" onclick="getElementById('intro').pause();hideStuff('menu');loadBoard();showStuff('highscore')"> Highscore </button><br>
+		</section>
+		<section>
+			<img src="res/redcarnicerh4.png" class="menuimages"/>
+			<img src="res/whitecarniceqo1.png" class="menuimages"/>
+			<img src="res/yellowcarnicecl2.png" class="menuimages"/>
+		</section>
+	</div>
+	<div id="start">
+		<header id="starthead">
+			<h1> Get ready to rumble </h1>
+		</header>
+		
+		<section class="basechoise">
+			<form >
+				User name: <input id="userName" type="text" name="fname" value="Player" /></br>
+			</form> 
+			<form>
+				Mastery level
+				<select name="mastery_level" id="mastery">
+					<option value="kindergarden"> Kindergarden </option>
+					<option value="casual"> Casual </option>
+					<option value="easy"> Easy </option>
+				</select>
+			</form>
+		</section>
+		
+		<section class="carchoise">
+			<form>
+				<label for="carpick">
+					Choose your awesome vehicle
+				</label></br>
+				
+				<section>
+					<input id="car1" type="radio" name="group1" value="red" class="carbuttons"> 
+					<input id="car2" type="radio" name="group1" value="white" checked class="carbuttons"> 
+					<input id="car3" type="radio" name="group1" value="yellow" class="carbuttons">
+				</section>
+				
+				<section>
+					<img src="res/redsmall.png" class="carimages"/>
+					<img src="res/whitesmall.png" class="carimages"/>
+					<img src="res/yellowsmall.png" class="carimages"/>
+				</section>
+			</form>
+		</section>
+		
+		<section id="colorpicker">	
+			<label for="colorpick">
+				Pick your favourite color
+			</label></br>
+			<input id="pathColor" type="color" name="colorpicker"></br>
+		</section>
+		
+		<section id="startbuttons">
+			<button class="menubutton" type="button" onclick="readyClicked()"> Ready </button></br> 
+			<button  class="menubutton" onclick="backToMenu();hideStuff('start');showStuff('menu');playIntro();">
+				<img width=80 height=40 src="res/leftarr.png"/>
+			</button>
+		</section>	
+	</div>
+	
+	<div id = "tutorial">		
+		<h1> This is the tutorial screen </h1>
+		<section>
+			<figure id="tutorialImage">
+				<img src="res/tut.png">
+				<figcaption> Example situation within a game with various detailed explanations of dynamic gameplay!! </figcaption>
+			</figure>
+			<details>
+				<summary> Great information for a newbie or a casual player </summary>
+				<p>
+					<b>MISSION</b>: Your main objective is to leave the labyrinth of doom and eat the cookie <br />
+					<b>BONUS</b>: Alive. <br />
+					<b>TIPS</b>: Use WASD and avoid weird stuff, gl :D
+				</p>
+			</details>
+		</section>
+		
+		<button  class="menubutton" onclick="backToMenu();hideStuff('tutorial');showStuff('menu');playIntro();">
+			<img width=80 height=40 src="res/leftarr.png"/>
+		</button>
+	</div>
+	<div id="game">		
+		<h1> Welcome to the game screen </h1>
+		<section id="gameScreen">
+			<canvas id="gameCanvas" width="800" height="400"></canvas> 
+		</section>
+		
+		<button class="menubutton" type="button" id="saveButton" onclick="saveClicked();"> Save </button><br>
+		<button class="menubutton" onclick="stopGame();backToMenu();playIntro();">
+			<img width=80 height=40 src="res/leftarr.png"/>
+		</button>
+	</div>
+	
+	<div id="highscore">
+		<h1> Welcome to the highscore screen </h1>
+		
+		<section id="dataSection">
+			<p> Waiting for data </p>
+		</section>
+		<button class="menubutton" onclick="backToMenu();saveBoard(getTable());hideStuff('highscore');showStuff('menu');playIntro();">
+			<img width=80 height=40 src="res/leftarr.png"/>
+		</button>
+	</div>
+	
+	<footer id="foot">		
+		<details>
+			<summary> Copyright 2012 </summary>
+			<p> - created by group "Noname": Jonas Inčius & Paulina Morkytė. </p>
+			<p> for HTML5 course. </p>
+		</details>
+	</footer> 
+</body>
+
+</html>
